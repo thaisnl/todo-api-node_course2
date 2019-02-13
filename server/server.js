@@ -10,6 +10,8 @@ var {User} = require('./models/user');
 //const argv = yargs.argv;
 
 var app = express();
+//usa essa porta (vai ser a do heroku) ou a 3000 se ela nao estiver disponivel, assim rodando localmente
+const port = process.env.PORT || 3000;
 
 
 //middleware
@@ -28,9 +30,6 @@ app.post('/todos', (req, res) =>{
 	});
 });
 
-app.listen(3000, ()=>{
-	console.log('Começou na porta 3000');
-});
 
 app.get('/todos', (req, res)=>{
 	Todo.find({}).then((todos)=>{
@@ -75,6 +74,10 @@ app.delete('/todos/:id', (req, res)=>{
 	}).catch((e)=>{
 		res.status(400).send();
 	})
+});
+
+app.listen(port, ()=>{
+	console.log(`Começou na porta ${port}`);
 });
 
 //seta o mongoose pra usar promises e define a library da promise
