@@ -1,15 +1,15 @@
-var express = require('express');
-var bodyParser = require('body-parser');
-var {ObjectId} = require('mongodb');
-
-var {mongoose} = require('./db/mongoose');
-var {Todo} = require('./models/todo');
+const express = require('express');
+const bodyParser = require('body-parser');
+const {ObjectId} = require('mongodb');
+const _ = require('lodash');
+const {mongoose} = require('./db/mongoose');
+const {Todo} = require('./models/todo');
 //pega so propriedades especificas inves de ter que botar Todo.Todo
 //body-parser pra enviar json pro server
-var {User} = require('./models/user');
+const {User} = require('./models/user');
 //const argv = yargs.argv;
 
-var app = express();
+const app = express();
 //usa essa porta (vai ser a do heroku) ou a 3000 se ela nao estiver disponivel, assim rodando localmente
 const port = process.env.PORT || 3000;
 
@@ -71,6 +71,41 @@ app.delete('/todos/:id', (req, res)=>{
 			return res.status(404).send();
 		}
 		res.status(200).send();
+	}).catch((e)=>{
+		res.status(400).send();
+	})
+});
+
+app.patch('/todos/:id', (req, res)=>{
+	var id = req.params.id;
+
+	//pick recebe um objeto e um array de parametros q vai tirar desse objeto se eles existirem
+	var body = _.pick(req.body, ['text', 'completed']);
+
+	if(!ObjectId.isValid(id)){
+		return res.status(404).send();
+	}
+
+	if(_.isBoolean(body.completed) && body.completed){
+		body.completedAt = new Date().getTime();
+	}else{
+		body.completed = false;
+		body.completedAt = null;
+	}
+
+	Todo.findByIdAndUpdate(id, {
+		$set: {
+			body
+		}
+	}, {
+		new: true	
+	}).then((todo)=>{
+		if(!todo){
+			return res.status(404).send();
+		}
+		//envia wrapped num objeto
+		res.send({todo});
+
 	}).catch((e)=>{
 		res.status(400).send();
 	})
