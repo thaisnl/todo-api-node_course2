@@ -4,6 +4,7 @@ const {ObjectId} = require('mongodb');
 const _ = require('lodash');
 const {mongoose} = require('./db/mongoose');
 const {Todo} = require('./models/todo');
+const {authenticate} = require('./middleware/authenticate');
 //pega so propriedades especificas inves de ter que botar Todo.Todo
 //body-parser pra enviar json pro server
 const {User} = require('./models/user');
@@ -17,9 +18,10 @@ const port = process.env.PORT || 3000;
 //middleware
 app.use(bodyParser.json());
 
-app.post('/todos', (req, res) =>{
+app.post('/todos', authenticate, (req, res) =>{
 	var todo = new Todo({
-		text: req.body.text
+		text: req.body.text,
+		_creator: req.user._id
 	});
 
 	todo.save().then((doc)=>{
@@ -31,8 +33,8 @@ app.post('/todos', (req, res) =>{
 });
 
 
-app.get('/todos', (req, res)=>{
-	Todo.find({}).then((todos)=>{
+app.get('/todos', authenticate, (req, res)=>{
+	Todo.find({_creator: req.user._id}).then((todos)=>{
 		res.send({
 			todos
 		});
@@ -127,9 +129,42 @@ app.post('/users', (req, res) =>{
 
 });
 
+//vai transformar isso em middleware
+app.get('/users/me', authenticate, (req, res)=>{
+	res.send(req.user);
+});
+
+// POST /users/login {email, password}
+app.post('/users/login', (req, res)=>{
+	//ainda não tem o token, quer conseguir
+	var body = _.pick(req.body, ['email', 'password']);
+
+	User.findByCredentials(body.email, body.password).then((user) =>{
+		//return pra manter a chain viva e o catch poder pegar os erros
+		return user.generateAuthToken().then((token)=>{
+			res.header('x-auth', token).send(user);
+		});
+	}).catch((e)=>{
+		res.status(400).send();
+	});
+
+});
+
+//essa route vai ser privada - tem de estar autenticado pra executar
+app.delete('/users/logout', authenticate, (req, res) => {
+	//tem acesso ao req.user já queo usuário está autenticado
+	req.user.removeToken(req.token).then(()=>{
+		res.status(200).send();
+	}).catch((e)=>{
+		res.status(400).send();
+	});
+});
+
 app.listen(port, ()=>{
 	console.log(`Começou na porta ${port}`);
 });
+
+
 
 //seta o mongoose pra usar promises e define a library da promise
 
