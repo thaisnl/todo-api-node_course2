@@ -1,3 +1,5 @@
+require('./config/config');
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const {ObjectId} = require('mongodb');
@@ -18,6 +20,7 @@ const port = process.env.PORT || 3000;
 //middleware
 app.use(bodyParser.json());
 
+//creator vai ser relacionado ao retorno do authenticate, que atribui ao _creator user daquele token
 app.post('/todos', authenticate, (req, res) =>{
 	var todo = new Todo({
 		text: req.body.text,
@@ -43,14 +46,17 @@ app.get('/todos', authenticate, (req, res)=>{
 	});
 });
 
-app.get('/todos/:id', (req, res)=>{
+app.get('/todos/:id', authenticate, (req, res)=>{
 	var id = req.params.id;
 
 	if(!ObjectId.isValid(id)){
 		return res.status(404).send();
 	}
 
-	Todo.findById(id).then((doc)=>{
+	Todo.findOne({
+		_id: id,
+		_creator: req.user._id
+	}).then((doc)=>{
 		if(!doc){
 			return res.status(404).send();
 		}
@@ -61,7 +67,7 @@ app.get('/todos/:id', (req, res)=>{
 
 });
 
-app.delete('/todos/:id', (req, res)=>{
+app.delete('/todos/:id', authenticate, (req, res)=>{
 	var id = req.params.id;
 
 	if(!ObjectId.isValid(id)){
@@ -78,7 +84,7 @@ app.delete('/todos/:id', (req, res)=>{
 	})
 });
 
-app.patch('/todos/:id', (req, res)=>{
+app.patch('/todos/:id', authenticate, (req, res)=>{
 	var id = req.params.id;
 
 	//pick recebe um objeto e um array de parametros q vai tirar desse objeto se eles existirem
@@ -95,7 +101,12 @@ app.patch('/todos/:id', (req, res)=>{
 		body.completedAt = null;
 	}
 
-	Todo.findByIdAndUpdate(id, {
+	//ele vê se o id que a pessoa pôs na url é o mesmo id relacionado ao _creator, que é setado qnd o todo é criado
+	//eeee equivale ao _id do user relacionado ao token q vai no header
+	Todo.findOneAndUpdate({
+		_id: id,
+		_creator: req.user._id
+	}, {
 		$set: body
 	}, {
 		new: true	
@@ -113,7 +124,7 @@ app.patch('/todos/:id', (req, res)=>{
 
 
 //post /users
-
+//se cadastrando
 app.post('/users', (req, res) =>{
 	var body = _.pick(req.body, ['email', 'password']);
 
@@ -134,13 +145,18 @@ app.get('/users/me', authenticate, (req, res)=>{
 	res.send(req.user);
 });
 
+//retorna um token
 // POST /users/login {email, password}
 app.post('/users/login', (req, res)=>{
 	//ainda não tem o token, quer conseguir
 	var body = _.pick(req.body, ['email', 'password']);
 
+	//na funçao find by credentials vai procurar o user, dai comparar a password com a armazenada q tem o hash e retorna
+	//um token se der bom
 	User.findByCredentials(body.email, body.password).then((user) =>{
 		//return pra manter a chain viva e o catch poder pegar os erros
+		//quando o usar chama o login, o retorno deve ser um token no header
+		//pra o usuario usar
 		return user.generateAuthToken().then((token)=>{
 			res.header('x-auth', token).send(user);
 		});
@@ -153,6 +169,7 @@ app.post('/users/login', (req, res)=>{
 //essa route vai ser privada - tem de estar autenticado pra executar
 app.delete('/users/logout', authenticate, (req, res) => {
 	//tem acesso ao req.user já queo usuário está autenticado
+	//no authenticate passa o token no header dai se passar ele vai colocar no req o usuario e  o token
 	req.user.removeToken(req.token).then(()=>{
 		res.status(200).send();
 	}).catch((e)=>{

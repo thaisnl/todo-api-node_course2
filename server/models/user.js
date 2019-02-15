@@ -2,7 +2,8 @@ const mongoose = require('mongoose'),
 	validator = require('validator'),
 	jwt = require('jsonwebtoken'),
 	_ = require('lodash'),
-	bcrypt = require('bcryptjs');
+	bcrypt = require('bcryptjs'),
+	config = require('./config/config');
 
 
 var UserSchema = new mongoose.Schema({
@@ -12,12 +13,13 @@ var UserSchema = new mongoose.Schema({
 		minlength: 1,
 		required: true,
 		unique: true,
+		//seta o validator para o CAMPO EMAIL
 		validate: {
 			validator: validator.isEmail,
 			message: '{VALUE} não é um email válido'
 		}
 	},
-
+	//os campos são objetos JSON
 	password: {
 		type: String,
 		require: true,
@@ -34,8 +36,12 @@ var UserSchema = new mongoose.Schema({
 			required: true
 		}
 	}]
-})
+});
 
+//cria o model User a partir do schema
+var User = mongoose.model('User', UserSchema);
+
+//métodos são para as instancias e statics para o objeto 
 UserSchema.methods.toJSON = function () {
 	var user = this;
 	var userObject = user.toObject();
@@ -49,9 +55,10 @@ UserSchema.methods.toJSON = function () {
 UserSchema.methods.generateAuthToken = function () {
 	var user = this;
 	var access = 'auth';
-	var token = jwt.sign({_id: user._id.toHexString(), access}, '753951').toString();
+	var token = jwt.sign({_id: user._id.toHexString(), access}, config.JWT_SECRET).toString();
 	user.tokens = user.tokens.concat([{access, token}]);
 
+	//como tá retornando o coisa da promise, qnd a outra função pegar o token vai ser passado como parametro
 	return user.save().then(()=>{
 		return token;
 	});
@@ -73,7 +80,7 @@ UserSchema.statics.findByToken = function (token){
 	var decoded;
 	try{
 		//vai ver se joga um erro
-		decoded = jwt.verify(token, '753951');
+		decoded = jwt.verify(token, config.JWT_SECRET);
 	}catch (e){
 		return Promise.reject();
 	}
@@ -123,8 +130,6 @@ UserSchema.pre('save', function(next){
 		next();
 	}
 });
-
-var User = mongoose.model('User', UserSchema);
 
 
 module.exports = {User};
